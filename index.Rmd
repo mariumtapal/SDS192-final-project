@@ -1,0 +1,111 @@
+---
+title: "What factors decide how long you live?"
+author: "Marium Tapal, Cecilia Liu & Xiruo Zheng"
+date: "Last updated on `r Sys.Date()`"
+output:
+  html_document:
+    code_folding: hide
+    highlight: tango
+    theme: yeti
+    toc: yes
+    toc_depth: 2
+    toc_float:
+      collapsed: false
+    df_print: kable
+---
+```{r, echo=FALSE, message=FALSE, warning=FALSE, error = FALSE}
+# Set R Markdown chunk defaults:
+knitr::opts_chunk$set(
+  echo = FALSE, message = FALSE, warning = FALSE, 
+  fig.width = 16/2, fig.height = 9/2
+)
+```
+
+# What is Life Expectancy?
+Life expectancy is a statistical measurement of the average time a person is expected to live. ^[[Wikipedia. (2018, December 16). Life Expectancy.](https://www.kaggle.com/kumarajarshi/life-expectancy-who){target="_blank"}] It’s an important index to show people’s health problems and countries’ factors that lead to different life expectancies over the world. Over the 20th century, the average world life expectancy has increased tremendously, where the average for 2016 is 72 years old.^[[World Health Organization. (2018, December 16). Global Health Observatory (GHO) data.](https://www.who.int/gho/mortality_burden_disease/life_tables/situation_trends/en/){target="_blank"}] 
+
+# Map: To know how long you'll live
+Click on one of the circle markers on the map below to know how long you can expect to live in that country ^[Based on 2014 data.]! The map shows the world overall life expectancies, with “red” representing developed countries and “green” representing developing countries. We can observe that most developing countries are in Africa and South America, while most developed countries gather in Europe. 
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE, error = FALSE}
+# Loading all packages
+library(tidyverse)
+library(RColorBrewer)
+library(leaflet)
+library(maps)
+
+# Reading in datasets
+life_expectancy <- read.csv("Life Expectancy Data.csv")
+continents <- read.csv("countries and continents.csv")
+coordinates2 <- read.csv("coordinates2.csv")
+
+# Selecting important variables from the continents dataset
+continents <- continents %>% select(official_name_en, Continent, Capital) %>% 
+  rename(Country = official_name_en)
+
+# Renaming the NA with "NA" and joining the two dataframes
+life_expectancy_continents <-
+  full_join(continents, life_expectancy, by = "Country") %>%
+  mutate(
+    Continent = as.character(Continent),
+    Continent = ifelse(is.na(Continent), "NA", Continent)
+    )
+
+# Renaming country variable in coordinates2 to join w the other dataset
+coordinates <- coordinates2 %>%
+  rename(Country = Countryname) %>%
+  mutate(Country = as.character(Country),
+         Country = ifelse(Country == "United States", "United States of America", Country
+         ))
+mapdata <- full_join(life_expectancy_continents, coordinates, by = "Country")
+
+# Map
+# Filtering year 2014 for the map data
+year_2014 <- mapdata %>%
+  filter(Year == 2014)
+
+# Setting color palette
+pal <- colorFactor(
+  palette = 'Set1',
+  domain = year_2014$Status)
+
+# Creating Data for Layers in Map
+one <- filter(year_2014, Status == 'Developed')
+two <- filter(year_2014, Status == 'Developing')
+
+year_2014%>%leaflet() %>% 
+  addTiles() %>%
+  addProviderTiles(providers$Stamen.Toner) %>% 
+  addTiles(group = "Open Street Maps") %>% 
+  addCircleMarkers( 
+    data =one, radius = 10, 
+    color = ~pal(Status),
+    group ='Developed',
+    popup = ~paste("Life Expectancy =", year_2014$Life.expectancy)) %>% 
+  addCircleMarkers( 
+    data = two, radius = 10, 
+    color = ~pal(Status),
+    group = 'Developing', 
+    popup = ~paste("Life Expectancy =", year_2014$Life.expectancy)) %>% 
+  addLayersControl(baseGroups = c("Toner by Stamen", "Open Street Maps"),
+                   overlayGroups = year_2014$Status,
+                   options = layersControlOptions(collapsed = FALSE)) %>% 
+  setView(lng = 20.63, lat = 28.77, zoom = 2)
+```
+
+# Our Research Problem
+Diving in a little deeper, the table shows the mean and standard deviation of different continents’ life expectancies, categorized further by their developed or developing status. Overall, the mean of life expectancies has an average above 80 years old approximately for developed continents, while for developing continents is much smaller at around 70 years old. Developing countries' life expectancies differ much more than the developed countries, indicated by the range of standard deviations between 3.4 and 6.7 for the former, and between 0.2 and 4.2 for the latter. In this blog post, we examine some reasons for these differences, which can be found in the “More Info” tab.
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE, error = FALSE}
+# Filtering for years 2011 to 2014
+year_2011_2014 <- life_expectancy_continents %>%
+  filter(Year%in%c(2011,2012,2013,2014))
+
+# Summary Statistics
+table <- year_2011_2014 %>%
+ group_by(Status, Continent) %>%
+ summarize(Mean = mean(Life.expectancy, na.rm = TRUE),
+           Standard_Deviation = sd(Life.expectancy, na.rm = TRUE)) %>%
+ arrange(desc(Mean))
+table
+```
